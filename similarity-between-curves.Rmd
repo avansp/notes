@@ -1,0 +1,77 @@
+---
+title: "Similarity between curves"
+author: "Avan Suinesiaputra"
+date: "4 March 2016"
+output: html_document
+---
+
+Let's say I have three curves like these
+```{r setup, echo=TRUE, tidy=TRUE, fig.align='center', fig.height=3, out.width='80%'}
+rm(list=ls())
+par(mar=c(5,2,1,1))
+C = read.csv('./data/curves.csv', header=TRUE)
+plot(M1 ~ TimeStamp, data=C, type='l', col='dodgerblue3', ylim=range(C[,c("M1","M2","M3")]), xlab="TimeStamp", ylab="", lwd=2)
+lines(M2 ~ TimeStamp, data=C, col='deeppink3')
+lines(M3 ~ TimeStamp, data=C, col='forestgreen', lwd=2)
+legend('topright', legend=c('M1','M2','GT'), col=c('dodgerblue3','deeppink3','forestgreen'), lty=1)
+```
+
+- *How can I measure the similarity between these curves?*
+- *If GT is the ground truth, how close M1 curve compared to M2 curve to the ground truth?*
+
+### Root Mean Squared Deviation (Error) ###
+
+The easiest way to compare the curves is by computing the **Root Mean Squared Deviation (RMSD)** or also known alse **Root Mean Squared Error (RMSE)**:
+
+$$
+\textrm{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n}\left(\hat{y}_i - y_i\right)^2}
+$$
+
+```{r rmse, echo=TRUE, tidy=TRUE}
+rmse = function(y,yi){
+  stopifnot(length(y)==length(yi)) 
+  sqrt(sum((y-yi)^2)/length(y))
+}
+
+c(rmse(C$M1,C$M3), rmse(C$M2,C$M3))
+```
+
+The problem with RMSE is that it does not take into account the time shift. M1 has much bigger RMSE than M2, but if we look at them, M1 curve is more similar to GT than M2 curve. Also that M1 peak is closer than M2 to the GT.
+
+### Dynamic Time Warping ###
+
+**Dynamic Time Warping (DTW)** is a technique to find optimal alignment between two given (time-dependent) sequences, which may vary in speed and time. The technique was first introduced by the speech recognition community, but it has since grown to computer vision, data mining, classification, and other fields that analyse time-series or pseudo time-series data.
+
+Suppose there are two curves $X$ of length $n$ and $Y$ of length $m$ that we want to align:
+$$
+  X = [X_1, X_2, \ldots, X_n] \\
+  Y = [Y_1, Y_2, \ldots, Y_m]
+$$
+
+
+In R, there is a package called [`dtw`](http://dtw.r-forge.r-project.org/) that implemented dynamic time warping.
+```{r dtw, echo=TRUE, tidy=TRUE, warning=FALSE, message=FALSE}
+library(dtw)
+```
+
+There are two common plots in DTW: alignment and curve-by-curve plots. Let's make these plots between each curve.
+
+Alignment and curve-by-curve plots between M1 and GT curves:
+```{r dtw.m1, echo=TRUE, tidy=TRUE}
+dtw.m1 = dtw(C$M1, C$M3, keep=TRUE, step=rabinerJuangStepPattern(6,"c"))
+plot(dtw.m1, type="threeway")
+plot(dtw.m1, type="twoway",match.lty=1, col=c('dodgerblue3','forestgreen'), lty=1, lwd=2)
+```
+
+Alignment and curve-by-curve plots between M2 and GT curves:
+```{r dtw.m2, echo=TRUE, tidy=TRUE}
+dtw.m2 = dtw(C$M2, C$M3, keep=TRUE, step=rabinerJuangStepPattern(6,"c"))
+plot(dtw.m2, type="threeway")
+plot(dtw.m2, type="twoway",match.lty=1, col=c('deeppink2','forestgreen'), lty=1, lwd=2)
+```
+
+The normalized distances between M1 to GT and M2 to GT are not that wide anymore:
+```{r dtw.dist, echo=TRUE, tidy=TRUE}
+dtw.m1$normalizedDistance
+dtw.m2$normalizedDistance
+```
